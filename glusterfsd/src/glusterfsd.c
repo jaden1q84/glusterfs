@@ -494,6 +494,7 @@ err:
 int
 create_fuse_mount (glusterfs_ctx_t *ctx)
 {
+		/* glusterfs 创建并初始化fuse xlator */
         int              ret = 0;
         cmd_args_t      *cmd_args = NULL;
         xlator_t        *master = NULL;
@@ -521,6 +522,7 @@ create_fuse_mount (glusterfs_ctx_t *ctx)
         if (!master->name)
                 goto err;
 
+		/* 动态装载fuse xlator */
         if (xlator_set_type (master, "mount/fuse") == -1) {
                 gf_log ("glusterfsd", GF_LOG_ERROR,
                         "MOUNT-POINT %s initialization failed",
@@ -533,6 +535,7 @@ create_fuse_mount (glusterfs_ctx_t *ctx)
         if (!master->options)
                 goto err;
 
+		/* 把ctx参数传递到mater */
         ret = set_fuse_mount_options (ctx, master->options);
         if (ret)
                 goto err;
@@ -548,6 +551,7 @@ create_fuse_mount (glusterfs_ctx_t *ctx)
                 }
         }
 
+		/* 执行 xlator 初始化 */
         ret = xlator_init (master);
         if (ret) {
                 gf_log ("", GF_LOG_DEBUG, "failed to initialize fuse translator");
@@ -1216,8 +1220,10 @@ glusterfs_ctx_defaults_init (glusterfs_ctx_t *ctx)
         struct rlimit        lim      = {0, };
         int                  ret      = -1;
 
+		/* 启用内存统计 */
         xlator_mem_acct_init (THIS, gfd_mt_end);
 
+		/* 当前进程UUID，结构：主机名-pid-时间戳:微妙 */
         ctx->process_uuid = generate_glusterfs_ctx_id ();
         if (!ctx->process_uuid) {
                 gf_log ("", GF_LOG_CRITICAL,
@@ -1252,6 +1258,7 @@ glusterfs_ctx_defaults_init (glusterfs_ctx_t *ctx)
         LOCK_INIT (&ctx->pool->lock);
 
         /* frame_mem_pool size 112 * 4k */
+		/* 初始化4K个 call_frame_t 的内存池, 每个大小为112字节 */
         ctx->pool->frame_mem_pool = mem_pool_new (call_frame_t, 4096);
         if (!ctx->pool->frame_mem_pool) {
                 gf_log ("", GF_LOG_CRITICAL,
@@ -1259,6 +1266,7 @@ glusterfs_ctx_defaults_init (glusterfs_ctx_t *ctx)
                 goto out;
         }
         /* stack_mem_pool size 256 * 1024 */
+		/* 初始化1K个 call_stack_t 的内存池，每个大小为256字节 */
         ctx->pool->stack_mem_pool = mem_pool_new (call_stack_t, 1024);
         if (!ctx->pool->stack_mem_pool) {
                 gf_log ("", GF_LOG_CRITICAL,
@@ -1413,7 +1421,8 @@ parse_cmdline (int argc, char *argv[], glusterfs_ctx_t *ctx)
                 cmd_args->log_file = "/dev/stderr";
                 cmd_args->no_daemon_mode = ENABLE_NO_DAEMON_MODE;
         }
-
+		
+		/* 根据进程名，决定是client端、server端或conctrol端 */
         process_mode = gf_get_process_mode (argv[0]);
         ctx->process_mode = process_mode;
 
@@ -1429,12 +1438,13 @@ parse_cmdline (int argc, char *argv[], glusterfs_ctx_t *ctx)
 
         if ((cmd_args->volfile_server == NULL)
             && (cmd_args->volfile == NULL)) {
+				/* 没有指定vol文件时，按运行模式定义默认各自的默认配置文件 */
                 if (process_mode == GF_SERVER_PROCESS)
-                        cmd_args->volfile = gf_strdup (DEFAULT_SERVER_VOLFILE);
+                        cmd_args->volfile = gf_strdup (DEFAULT_SERVER_VOLFILE);		/* glusterfsd 启动有 --volfile-id 参数，不会跑这里 */
                 else if (process_mode == GF_GLUSTERD_PROCESS)
-                        cmd_args->volfile = gf_strdup (DEFAULT_GLUSTERD_VOLFILE);
+                        cmd_args->volfile = gf_strdup (DEFAULT_GLUSTERD_VOLFILE);	/* glusterd 无指定参数，默认采用 /etc/glusterfs/glusterd.vol */
                 else
-                        cmd_args->volfile = gf_strdup (DEFAULT_CLIENT_VOLFILE);
+                        cmd_args->volfile = gf_strdup (DEFAULT_CLIENT_VOLFILE);		/* glusterfs 启动有 --volfile-id 参数，不会跑这里 */
 
                 /* Check if the volfile exists, if not give usage output
                    and exit */
@@ -1814,10 +1824,15 @@ out:
 int
 glusterfs_process_volfp (glusterfs_ctx_t *ctx, FILE *fp)
 {
+		/* 按fp配置文件开始构建vol调用图 */
         glusterfs_graph_t  *graph = NULL;
         int                 ret = -1;
         xlator_t           *trav = NULL;
 
+		/* 把vol解析成graph，即xlator关系图
+		 * 这个函数在 graphy.y 里面，通过lex语言解析配置文件。
+		 * 函数内会根据配置情况，执行打开加载 xlator so 文件，
+		 * 设置相关 init、fini、全局变量等，但不会执行初始化。 */
         graph = glusterfs_graph_construct (fp);
         if (!graph) {
                 gf_log ("", GF_LOG_ERROR, "failed to construct the graph");
@@ -1839,6 +1854,7 @@ glusterfs_process_volfp (glusterfs_ctx_t *ctx, FILE *fp)
                 goto out;
         }
 
+		/* 这里会初始化整个graph的xlator */
         ret = glusterfs_graph_activate (graph, ctx);
 
         if (ret) {
@@ -1846,6 +1862,7 @@ glusterfs_process_volfp (glusterfs_ctx_t *ctx, FILE *fp)
                 goto out;
         }
 
+		/* 打印当前的graph到日志文件 */
         gf_log_dump_graph (fp, graph);
 
         ret = 0;
@@ -1878,11 +1895,14 @@ glusterfs_volumes_init (glusterfs_ctx_t *ctx)
         }
 
         if (cmd_args->volfile_server) {
+				/* glusterfs、glusterfsd 走这里，用 --volfile-server 或 -s 参数
+				 * 连接到管理 volfile-server，发送 GF_CBK_FETCHSPEC 调用，并开始按事件运行 */
                 ret = glusterfs_mgmt_init (ctx);
                 /* return, do not emancipate() yet */
                 return ret;
         }
 
+		/* 打开ctx制定的 volfile 配置文件 */
         fp = get_volfp (ctx);
 
         if (!fp) {
@@ -1892,6 +1912,7 @@ glusterfs_volumes_init (glusterfs_ctx_t *ctx)
                 goto out;
         }
 
+		/* glusterd 进程走这里 */
         ret = glusterfs_process_volfp (ctx, fp);
         if (ret)
                 goto out;
@@ -1918,12 +1939,13 @@ main (int argc, char *argv[])
                         "ERROR: glusterfs context not initialized");
                 return ENOMEM;
         }
-	glusterfsd_ctx = ctx;
+	glusterfsd_ctx = ctx; /* 全局的根ctx管理指针 */
 
 #ifdef DEBUG
         gf_mem_acct_enable_set (ctx);
 #else
         /* Enable memory accounting on the fly based on argument */
+        /* release版下面通过 --mem-accounting 参数打开内存统计功能，用 kill -USR1 pid 可以dump出内存统计数据到 /run/gluster/ 里面 */
         gf_check_and_set_mem_acct (ctx, argc, argv);
 #endif
 
@@ -1937,6 +1959,7 @@ main (int argc, char *argv[])
         if (ret)
                 goto out;
 
+		/* 处理参数，并确定运行模式 */
         ret = parse_cmdline (argc, argv, ctx);
         if (ret)
                 goto out;
@@ -1961,6 +1984,7 @@ main (int argc, char *argv[])
 
         gf_proc_dump_init();
 
+		/* glusterfs 端才执行，初始化fuse xlator，非client端会直接返回 */
         ret = create_fuse_mount (ctx);
         if (ret)
                 goto out;
@@ -1968,7 +1992,8 @@ main (int argc, char *argv[])
         ret = daemonize (ctx);
         if (ret)
                 goto out;
-
+		
+		/* 初始化一个同步op任务的调度管理器 */
 	ctx->env = syncenv_new (0, 0, 0);
         if (!ctx->env) {
                 gf_log ("", GF_LOG_ERROR,

@@ -1529,13 +1529,15 @@ rpcsvc_transport_create (rpcsvc_t *svc, dict_t *options, char *name)
         int                ret   = -1;
         rpc_transport_t   *trans = NULL;
 
+		/* 根据配置装载 rpc_transport */
         trans = rpc_transport_load (svc->ctx, options, name);
         if (!trans) {
                 gf_log (GF_RPCSVC, GF_LOG_WARNING, "cannot create listener, "
                         "initing the transport failed");
                 goto out;
         }
-
+		
+		/* 开始listen了，回调都还没注册，会不会太快了？ */
         ret = rpc_transport_listen (trans);
         if (ret == -1) {
                 gf_log (GF_RPCSVC, GF_LOG_WARNING,
@@ -1543,6 +1545,7 @@ rpcsvc_transport_create (rpcsvc_t *svc, dict_t *options, char *name)
                 goto out;
         }
 
+		/* 注册回调函数 */
         ret = rpc_transport_register_notify (trans, rpcsvc_notify, svc);
         if (ret == -1) {
                 gf_log (GF_RPCSVC, GF_LOG_WARNING, "registering notify failed");
@@ -1596,12 +1599,14 @@ rpcsvc_create_listener (rpcsvc_t *svc, dict_t *options, char *name)
                 goto out;
         }
 
+		/* 把transport创建出来并listen */
         trans = rpcsvc_transport_create (svc, options, name);
         if (!trans) {
                 /* LOG TODO */
                 goto out;
         }
 
+		/* 把trans封装成一个rpcsvc_listener并关联到svc */
         listener = rpcsvc_listener_alloc (svc, trans);
         if (listener == NULL) {
                 goto out;
@@ -1657,6 +1662,7 @@ rpcsvc_create_listeners (rpcsvc_t *svc, dict_t *options, char *name)
         ptr = strtok_r (str, ",", &saveptr);
 
         while (ptr != NULL) {
+				/* 根据配置，逐个创建该rpcsvc的listener，并开始侦听和挂接到rpcsvc */
                 tmp = gf_strdup (ptr);
                 if (tmp == NULL) {
                         goto out;
@@ -1738,6 +1744,7 @@ rpcsvc_register_notify (rpcsvc_t *svc, rpcsvc_notify_t notify, void *mydata)
         rpcsvc_notify_wrapper_t *wrapper = NULL;
         int                      ret     = -1;
 
+		/* 封装一个通知包装器，加到svc的notify队列里面 */
         wrapper = rpcsvc_notify_wrapper_alloc ();
         if (!wrapper) {
                 goto out;
@@ -2162,13 +2169,15 @@ rpcsvc_init (xlator_t *xl, glusterfs_ctx_t *ctx, dict_t *options,
                 poolcount = RPCSVC_POOLCOUNT_MULT * svc->memfactor;
 
         gf_log (GF_RPCSVC, GF_LOG_TRACE, "rx pool: %d", poolcount);
+		/* 申请rxpool内存池，有个内存泄露的BUG TD28293 和这个内存相关 */
         svc->rxpool = mem_pool_new (rpcsvc_request_t, poolcount);
-        /* TODO: leak */
+        /* TODO: leak */ /* 这个TODO是官方代码写的，没看明白怎么leak了 */
         if (!svc->rxpool) {
                 gf_log (GF_RPCSVC, GF_LOG_ERROR, "mem pool allocation failed");
                 goto free_svc;
         }
-
+		
+		/* 支持认证，没用过，跳过 */
         ret = rpcsvc_auth_init (svc, options);
         if (ret == -1) {
                 gf_log (GF_RPCSVC, GF_LOG_ERROR, "Failed to init "
@@ -2182,6 +2191,7 @@ rpcsvc_init (xlator_t *xl, glusterfs_ctx_t *ctx, dict_t *options,
         svc->mydata = xl;
         gf_log (GF_RPCSVC, GF_LOG_DEBUG, "RPC service inited.");
 
+		/* 注册一个dump的program，handshake的时候用于获取对端信息 */
         gluster_dump_prog.options = options;
 
         ret = rpcsvc_program_register (svc, &gluster_dump_prog);

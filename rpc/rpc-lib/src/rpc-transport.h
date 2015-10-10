@@ -169,7 +169,7 @@ struct rpc_transport_pollin {
         void *private;
         struct iobref *iobref;
         struct iobuf  *hdr_iobuf;
-        char is_reply;
+        char is_reply;				/* 根据 msg_type 定义 */
 };
 typedef struct rpc_transport_pollin rpc_transport_pollin_t;
 
@@ -178,7 +178,7 @@ typedef int (*rpc_transport_notify_t) (rpc_transport_t *, void *mydata,
 
 
 struct rpc_transport {
-        struct rpc_transport_ops  *ops;
+        struct rpc_transport_ops  *ops;			/* 来自 rpc/rpc-transport/socket或rdma，由配置文件决定 */
         rpc_transport_t           *listener; /* listener transport to which
                                               * request for creation of this
                                               * transport came from. valid only
@@ -188,7 +188,7 @@ struct rpc_transport {
         void                      *private;
         struct _client_t          *xl_private;
         void                      *xl;       /* Used for THIS */
-        void                      *mydata;
+        void                      *mydata;			/* 事件回调函数notify的传入参数？ */
         pthread_mutex_t            lock;
         int32_t                    refcount;
 
@@ -203,7 +203,7 @@ struct rpc_transport {
         int32_t                  (*init)   (rpc_transport_t *this);
         void                     (*fini)   (rpc_transport_t *this);
         int                      (*reconfigure) (rpc_transport_t *this, dict_t *options);
-        rpc_transport_notify_t     notify;
+        rpc_transport_notify_t     notify;			/* transport层的事件的回调函数 */
         void                      *notify_data;
         peer_info_t                peerinfo;
         peer_info_t                myinfo;

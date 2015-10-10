@@ -109,8 +109,8 @@ typedef struct bd_fd {
 } bd_fd_t;
 
 typedef struct bd_priv {
-        lvm_t             handle;
-        char              *vg;
+        lvm_t             handle;			/* lvm句柄 */
+        char              *vg;				/* 当前bd-xlator对应的vg名字 */
         char              *pool;
         int                caps;
         gf_boolean_t       aio_init_done;

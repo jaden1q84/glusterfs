@@ -90,21 +90,22 @@ struct syncproc {
 
 /* hosts the scheduler thread and framework for executing synctasks */
 struct syncenv {
-        struct syncproc     proc[SYNCENV_PROC_MAX];
-        int                 procs;
+		/* 同步的计划任务线程池及调度队列 */
+        struct syncproc     proc[SYNCENV_PROC_MAX];	/* 线程池 */
+        int                 procs;					/* 当前线程池数，syncenv_scale时变大 */
 
-        struct list_head    runq;
-        int                 runcount;
-        struct list_head    waitq;
-        int                 waitcount;
+        struct list_head    runq;					/* 运行中的任务队列 */
+        int                 runcount;				/* 运行中的任务个数 */
+        struct list_head    waitq;					/* 等待状态的任务队列 */
+        int                 waitcount;				/* 等待队列任务个数 */
 
 	int                 procmin;
 	int                 procmax;
 
-        pthread_mutex_t     mutex;
-        pthread_cond_t      cond;
+        pthread_mutex_t     mutex;					/* 保护用的mutext */
+        pthread_cond_t      cond;					/* 线程调度时用的条件变量 */
 
-        size_t              stacksize;
+        size_t              stacksize;				/* Unkown?? */
 };
 
 

@@ -999,6 +999,7 @@ glusterd_init_uds_listener (xlator_t *this)
         }
         ret = 0;
 
+		/* 注册本地cli的rpc响应程序 */
         for (i = 0; i < gd_uds_programs_count; i++) {
                 ret = glusterd_program_register (this, rpc, gd_uds_programs[i]);
                 if (ret) {
@@ -1117,10 +1118,12 @@ init (xlator_t *this)
                 first_time = 1;
         }
 
+		/* 设定工作目录 */
         setenv ("GLUSTERD_WORKING_DIR", workdir, 1);
         gf_log (this->name, GF_LOG_INFO, "Using %s as working directory",
                 workdir);
 
+		/* 历史命令和结果保存文件 */
         snprintf (cmd_log_filename, PATH_MAX,"%s/.cmd_log_history",
                   DEFAULT_LOG_FILE_DIRECTORY);
         ret = gf_cmd_log_init (cmd_log_filename);
@@ -1131,6 +1134,7 @@ init (xlator_t *this)
                 exit (1);
         }
 
+		/* 卷配置文件路径 */
         snprintf (storedir, PATH_MAX, "%s/vols", workdir);
 
         ret = mkdir (storedir, 0777);
@@ -1142,6 +1146,7 @@ init (xlator_t *this)
                 exit (1);
         }
 
+		/* 对端配置文件路径 */
         snprintf (storedir, PATH_MAX, "%s/peers", workdir);
 
         ret = mkdir (storedir, 0777);
@@ -1153,6 +1158,7 @@ init (xlator_t *this)
                 exit (1);
         }
 
+		/* bricks配置文件目录 */
         snprintf (storedir, PATH_MAX, "%s/bricks", DEFAULT_LOG_FILE_DIRECTORY);
         ret = mkdir (storedir, 0777);
         if ((-1 == ret) && (errno != EEXIST)) {
@@ -1198,9 +1204,11 @@ init (xlator_t *this)
                 exit (1);
         }
 
+		/* 读一下配置文件的 transport.socket.listen-backlog，如果没有就设置个默认值 */
         ret = glusterd_rpcsvc_options_build (this->options);
         if (ret)
                 goto out;
+		/* 创建并初始化rpc服务 */
         rpc = rpcsvc_init (this, this->ctx, this->options, 64);
         if (rpc == NULL) {
                 gf_log (this->name, GF_LOG_ERROR,
@@ -1208,6 +1216,7 @@ init (xlator_t *this)
                 goto out;
         }
 
+		/* 注册glusterd的事件函数，只有 ACCEPT和 DISCONNECT 两个 */
         ret = rpcsvc_register_notify (rpc, glusterd_rpcsvc_notify, this);
         if (ret) {
                 gf_log (this->name, GF_LOG_ERROR,
@@ -1215,6 +1224,7 @@ init (xlator_t *this)
                 goto out;
         }
 
+		/* 按照配置开始侦听rpc端口 */
         /*
          * only one (atmost a pair - rdma and socket) listener for
          * glusterd1_mop_prog, gluster_pmap_prog and gluster_handshake_prog.
@@ -1227,6 +1237,7 @@ init (xlator_t *this)
                 goto out;
         }
 
+		/* 把 glusterd 所支持的所有 rpc 处理程序都注册到成功侦听的rpc来 */
         for (i = 0; i < gd_inet_programs_count; i++) {
                 ret = glusterd_program_register (this, rpc,
                                                  gd_inet_programs[i]);
@@ -1240,6 +1251,7 @@ init (xlator_t *this)
                 }
         }
 
+		/* 在本地创建一个unixsock套接字rpc服务器，供cli程序使用 */
         /* Start a unix domain socket listener just for cli commands
          * This should prevent ports from being wasted by being in TIMED_WAIT
          * when cli commands are done continuously
@@ -1250,6 +1262,7 @@ init (xlator_t *this)
                 goto out;
         }
 
+		/* 建个配置管理保存到本 xlator 的 private 里面 */
         conf = GF_CALLOC (1, sizeof (glusterd_conf_t),
                           gf_gld_mt_glusterd_conf_t);
         GF_VALIDATE_OR_GOTO(this->name, conf, out);
@@ -1290,6 +1303,7 @@ init (xlator_t *this)
                          "base-port override: %d", conf->base_port);
          }
 
+		/* 可以设置使用valgrind运行glusterfsd */
         /* Set option to run bricks on valgrind if enabled in glusterd.vol */
         conf->valgrind = _gf_false;
         ret = dict_get_str (this->options, "run-with-valgrind", &valgrind_str);
@@ -1319,6 +1333,7 @@ init (xlator_t *this)
 
         INIT_LIST_HEAD (&conf->mount_specs);
 
+		/* 处理 mountbroker.* 的参数内容，暂时没使用过这个参数，跳过 */
         ret = dict_foreach (this->options, _install_mount_spec, NULL);
         if (ret)
                 goto out;
@@ -1331,10 +1346,12 @@ init (xlator_t *this)
         if (ret)
                 goto out;
 
+		/* 配置了 geo-replication 才有效，暂时没用，跳过 */
         ret = configure_syncdaemon (conf);
         if (ret)
                 goto out;
 
+		/* 重要：读 vols、peers、bricks 配置文件，构建相关内部数据结构 */
         ret = glusterd_restore ();
         if (ret < 0)
                 goto out;

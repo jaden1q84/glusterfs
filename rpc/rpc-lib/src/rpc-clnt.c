@@ -411,6 +411,7 @@ rpc_clnt_reconnect (void *trans_ptr)
 
         pthread_mutex_lock (&conn->lock);
         {
+				/* 无论是何种方式进入，先停定时器 */
                 if (conn->reconnect)
                         gf_timer_call_cancel (clnt->ctx,
                                               conn->reconnect);
@@ -828,6 +829,7 @@ int
 rpc_clnt_notify (rpc_transport_t *trans, void *mydata,
                  rpc_transport_event_t event, void *data, ...)
 {
+		/* 这里是 rpc_transport_t 的事件函数，而不是 rcp_clnt 的 */
         rpc_clnt_connection_t  *conn        = NULL;
         struct rpc_clnt        *clnt        = NULL;
         int                     ret         = -1;
@@ -847,6 +849,7 @@ rpc_clnt_notify (rpc_transport_t *trans, void *mydata,
         switch (event) {
         case RPC_TRANSPORT_DISCONNECT:
         {
+				/* 客户端断开后设置重连定时器 */
                 rpc_clnt_connection_cleanup (conn);
 
                 pthread_mutex_lock (&conn->lock);
@@ -883,6 +886,7 @@ rpc_clnt_notify (rpc_transport_t *trans, void *mydata,
 
         case RPC_TRANSPORT_MAP_XID_REQUEST:
         {
+				/* 没看懂这个事件是干什么的，pass…… */
                 req_info = data;
                 ret = rpc_clnt_fill_request_info (clnt, req_info);
                 break;
@@ -895,7 +899,8 @@ rpc_clnt_notify (rpc_transport_t *trans, void *mydata,
                         gettimeofday (&conn->last_received, NULL);
                 }
                 pthread_mutex_unlock (&conn->lock);
-
+				
+				/* 这是data参数就是进入的时间了，区分是不是普通回应还是回调 */
                 pollin = data;
                 if (pollin->is_reply)
                         ret = rpc_clnt_handle_reply (clnt, pollin);
@@ -929,6 +934,7 @@ rpc_clnt_notify (rpc_transport_t *trans, void *mydata,
                    for just one successful attempt */
                 conn->config.remote_port = 0;
 
+				/* 调用 rpc_clnt 层的CONNECT事件 */
                 if (clnt->notifyfn)
                         ret = clnt->notifyfn (clnt, clnt->mydata,
                                               RPC_CLNT_CONNECT, NULL);
@@ -976,6 +982,7 @@ rpc_clnt_connection_init (struct rpc_clnt *clnt, glusterfs_ctx_t *ctx,
                 conn->frame_timeout = 1800;
         }
 
+		/* 装在 transport 层并初始化 */
         conn->trans = rpc_transport_load (ctx, options, name);
         if (!conn->trans) {
                 gf_log (name, GF_LOG_WARNING, "loading of new rpc-transport"
@@ -983,11 +990,13 @@ rpc_clnt_connection_init (struct rpc_clnt *clnt, glusterfs_ctx_t *ctx,
                 ret = -1;
                 goto out;
         }
-
+		
+		/* 加trans引用 */
         rpc_transport_ref (conn->trans);
 
         conn->rpc_clnt = clnt;
 
+		/* 注册 rpc_clnt *transport* 层的事件函数 */
         ret = rpc_transport_register_notify (conn->trans, rpc_clnt_notify,
                                              conn);
         if (ret == -1) {
@@ -1015,6 +1024,7 @@ struct rpc_clnt *
 rpc_clnt_new (dict_t *options, glusterfs_ctx_t *ctx, char *name,
               uint32_t reqpool_size)
 {
+		/* 新建并初始化一个 rcp_clnt */
         int                    ret  = -1;
         struct rpc_clnt       *rpc  = NULL;
 
@@ -1047,6 +1057,7 @@ rpc_clnt_new (dict_t *options, glusterfs_ctx_t *ctx, char *name,
                 goto out;
         }
 
+		/* 初始化connection，也就是transport层 */
         ret = rpc_clnt_connection_init (rpc, ctx, options, name);
         if (ret == -1) {
                 pthread_mutex_destroy (&rpc->lock);

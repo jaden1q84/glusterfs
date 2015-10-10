@@ -489,6 +489,7 @@ syncenv_task (struct syncproc *proc)
         pthread_mutex_lock (&env->mutex);
         {
                 while (list_empty (&env->runq)) {
+						/* 没有运行队列，尝试缩减线程池，设置当前线程的退出时间 */
                         sleep_till.tv_sec = time (NULL) + SYNCPROC_IDLE_TIME;
                         ret = pthread_cond_timedwait (&env->cond, &env->mutex,
                                                       &sleep_till);
@@ -496,6 +497,7 @@ syncenv_task (struct syncproc *proc)
                                 break;
                         if ((ret == ETIMEDOUT) &&
                             (env->procs > env->procmin)) {
+								/* 满足条件可以缩小线程池 */								
                                 task = NULL;
                                 env->procs--;
                                 memset (proc, 0, sizeof (*proc));
@@ -653,6 +655,7 @@ syncenv_new (size_t stacksize, int procmin, int procmax)
         INIT_LIST_HEAD (&newenv->runq);
         INIT_LIST_HEAD (&newenv->waitq);
 
+		/* 调用堆栈大小？？ */
         newenv->stacksize    = SYNCENV_DEFAULT_STACKSIZE;
         if (stacksize)
                 newenv->stacksize = stacksize;

@@ -124,7 +124,7 @@ typedef struct {
 typedef struct {
         struct _volfile_ctx     *volfile;
         pthread_mutex_t          mutex;
-        struct list_head         peers;
+        struct list_head         peers;			/* 所有peers列表，结构体为 glusterd_peerinfo_t */
         struct list_head         xaction_peers;
         gf_boolean_t             verify_volfile_checksum;
         gf_boolean_t             trace;
@@ -135,7 +135,7 @@ typedef struct {
         nodesrv_t               *nfs;
         nodesrv_t               *quotad;
         struct pmap_registry    *pmap;
-        struct list_head         volumes;
+        struct list_head         volumes;		/* 当前的所有卷列表，结构体为 glusterd_volinfo_t */
         pthread_mutex_t          xprt_lock;
         struct list_head         xprt_list;
         gf_store_handle_t       *handle;
@@ -166,9 +166,10 @@ typedef enum gf_brick_status {
 } gf_brick_status_t;
 
 struct glusterd_brickinfo {
+		/* 对应 vols/vol/bricks/ 里面的一个brick配置 */
         char               hostname[1024];
         char               path[PATH_MAX];
-        struct list_head   brick_list;
+        struct list_head   brick_list;		/* 链接到 glusterd_volinfo_t.bricks */
         uuid_t             uuid;
         int                port;
         int                rdma_port;
@@ -269,20 +270,21 @@ struct glusterd_replace_brick_ {
 
 typedef struct glusterd_replace_brick_ glusterd_replace_brick_t;
 
+/* 对应到 /etc/glusterd/vols/vol/info 文件的内容 */
 struct glusterd_volinfo_ {
         char                      volname[GLUSTERD_MAX_VOLUME_NAME];
-        int                       type;
-        int                       brick_count;
-        struct list_head          vol_list;
-        struct list_head          bricks;
-        glusterd_volume_status    status;
+        int                       type;				/* 卷类型：eg：分布复制卷=2，见 gf1_cluster_type */
+        int                       brick_count;		/* 就是count */
+        struct list_head          vol_list;			/* 最终会被链接到 glusterd_conf_t.volumes */
+        struct list_head          bricks;			/* 当前volume下所覆盖的bricks信息，对应 vols/vol/bricks 配置文件 */
+        glusterd_volume_status    status;			/* 启停状态 */
         int                       sub_count;  /* backward compatibility */
-        int                       stripe_count;
-        int                       replica_count;
+        int                       stripe_count;		/* 条带数，无条带则为1 */
+        int                       replica_count;	/* 副本数 */
         int                       subvol_count; /* Number of subvolumes in a
                                                  distribute volume */
         int                       dist_leaf_count; /* Number of bricks in one
-                                                    distribute subvolume */
+                                                    distribute subvolume */ /* 在一个分布卷下面的叶子数，就是 stripe * replica */
         int                     port;
         gf_store_handle_t *shandle;
         gf_store_handle_t *rb_shandle;
@@ -299,13 +301,13 @@ struct glusterd_volinfo_ {
         uint32_t                quota_conf_version;
         uint32_t                cksum;
         uint32_t                quota_conf_cksum;
-        gf_transport_type       transport_type;
-        gf_transport_type   nfs_transport_type;
+        gf_transport_type       transport_type;			/* gluster通信方式，tcp or other */
+        gf_transport_type   nfs_transport_type;			/* NFS的通信方式 */
 
         dict_t                   *dict;
 
-        uuid_t                    volume_id;
-        auth_t                    auth;
+        uuid_t                    volume_id;			/* vol的uuid */
+        auth_t                    auth;					/* 认证用的 */
         char                     *logdir;
 
         dict_t                   *gsync_slaves;

@@ -1137,8 +1137,8 @@ glusterfs_handle_rpc_msg (rpcsvc_request_t *req)
 }
 
 rpcclnt_cb_actor_t mgmt_cbk_actors[GF_CBK_MAXVALUE] = {
-        [GF_CBK_FETCHSPEC] = {"FETCHSPEC", GF_CBK_FETCHSPEC, mgmt_cbk_spec },
-        [GF_CBK_EVENT_NOTIFY] = {"EVENTNOTIFY", GF_CBK_EVENT_NOTIFY,
+        [GF_CBK_FETCHSPEC] = {"FETCHSPEC", GF_CBK_FETCHSPEC, mgmt_cbk_spec },	/* glusterd 下发更新volfile的命令 */
+        [GF_CBK_EVENT_NOTIFY] = {"EVENTNOTIFY", GF_CBK_EVENT_NOTIFY,			/* 空的？？？ */
                                  mgmt_cbk_event},
 };
 
@@ -1410,6 +1410,7 @@ out:
 int
 glusterfs_volfile_fetch (glusterfs_ctx_t *ctx)
 {
+		/* 更新volfile有3个调用点：RPC Connect事件、管理程序下发的 GF_HNDSK_GETSPEC 动作、信号HUP */
         cmd_args_t       *cmd_args = NULL;
         gf_getspec_req    req = {0, };
         int               ret = 0;
@@ -1580,6 +1581,7 @@ static int
 mgmt_rpc_notify (struct rpc_clnt *rpc, void *mydata, rpc_clnt_event_t event,
                  void *data)
 {
+		/* 管理rcp事件函数，只有connect和disconnect之分 */
         xlator_t         *this = NULL;
         glusterfs_ctx_t  *ctx = NULL;
         int              ret = 0;
@@ -1631,6 +1633,7 @@ mgmt_rpc_notify (struct rpc_clnt *rpc, void *mydata, rpc_clnt_event_t event,
         case RPC_CLNT_CONNECT:
                 rpc_clnt_set_connected (&((struct rpc_clnt*)ctx->mgmt)->conn);
 
+				/* 连上后就可以去取volfile了，取到volfile会reconfigure */
                 ret = glusterfs_volfile_fetch (ctx);
                 if (ret) {
                         emval = ret;
@@ -1664,6 +1667,7 @@ int
 glusterfs_rpcsvc_notify (rpcsvc_t *rpc, void *xl, rpcsvc_event_t event,
                      void *data)
 {
+		/* 注册到 ctx->listener，对于 listener 来说，只有两种事件要处理 */
         if (!xl || !data) {
                 goto out;
         }
@@ -1702,6 +1706,7 @@ glusterfs_listener_init (glusterfs_ctx_t *ctx)
         if (!cmd_args->sock_file)
                 return 0;
 
+		/* 构建unix套接字的属性选项 */
         ret = rpcsvc_transport_unix_options_build (&options,
                                                    cmd_args->sock_file);
         if (ret)
@@ -1712,17 +1717,20 @@ glusterfs_listener_init (glusterfs_ctx_t *ctx)
                 goto out;
         }
 
+		/* 注册通知事件 */
         ret = rpcsvc_register_notify (rpc, glusterfs_rpcsvc_notify, THIS);
         if (ret) {
                 goto out;
         }
 
+		/* 创建listener到rpc里面，只有glusterfsd需要listen*/
         ret = rpcsvc_create_listeners (rpc, options, "glusterfsd");
         if (ret < 1) {
                 ret = -1;
                 goto out;
         }
 
+		/* 把glusterfs mop的操作动注册到该rpcsvc，就可以开始干活了 */
         ret = rpcsvc_program_register (rpc, &glusterfs_mop_prog);
         if (ret) {
                 goto out;
@@ -1797,6 +1805,7 @@ glusterfs_mgmt_notify (int32_t op, void *data, ...)
 int
 glusterfs_mgmt_init (glusterfs_ctx_t *ctx)
 {
+		/* 构建管理模块，应该是glusterfs跟glusterd管理程序建立链接 */
         cmd_args_t              *cmd_args = NULL;
         struct rpc_clnt         *rpc = NULL;
         dict_t                  *options = NULL;
@@ -1820,13 +1829,15 @@ glusterfs_mgmt_init (glusterfs_ctx_t *ctx)
         if (ret)
                 goto out;
 
+		/* 申请并初始化一个rcp_clnt */
         rpc = rpc_clnt_new (options, THIS->ctx, THIS->name, 8);
         if (!rpc) {
                 ret = -1;
                 gf_log (THIS->name, GF_LOG_WARNING, "failed to create rpc clnt");
                 goto out;
         }
-
+		
+		/* 注册rpc层的事件函数 */
         ret = rpc_clnt_register_notify (rpc, mgmt_rpc_notify, THIS);
         if (ret) {
                 gf_log (THIS->name, GF_LOG_WARNING,
@@ -1834,6 +1845,7 @@ glusterfs_mgmt_init (glusterfs_ctx_t *ctx)
                 goto out;
         }
 
+		/* 注册管理命令回调函数，即glusterd下发的命令 */
         ret = rpcclnt_cbk_program_register (rpc, &mgmt_cbk_prog, THIS);
         if (ret) {
                 gf_log (THIS->name, GF_LOG_WARNING,
@@ -1841,12 +1853,14 @@ glusterfs_mgmt_init (glusterfs_ctx_t *ctx)
                 goto out;
         }
 
+		/* 对于glusterfs，只有一个事件：rebalance */
         ctx->notify = glusterfs_mgmt_notify;
 
         /* This value should be set before doing the 'rpc_clnt_start()' as
            the notify function uses this variable */
         ctx->mgmt = rpc;
 
+		/* 开始连接，然后就是根据事件干活了 */
         ret = rpc_clnt_start (rpc);
 out:
         return ret;

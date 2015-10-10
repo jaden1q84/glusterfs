@@ -1350,6 +1350,7 @@ out:
 int
 glusterd_retrieve_op_version (xlator_t *this, int *op_version)
 {
+		/* 读取 /etc/glusterd/glusterd.info 的 operating-version */
         char                    *op_version_str = NULL;
         glusterd_conf_t         *priv           = NULL;
         int                     ret             = -1;
@@ -1400,7 +1401,9 @@ out:
 
 static int
 glusterd_restore_op_version (xlator_t *this)
-{
+{	
+		/* 针对新装或升级，设置 /etc/glusterd/glusterd.info 的 operating-version 
+		 * 到当前版本值 GD_OP_VERSION_MAX */
         glusterd_conf_t *conf = NULL;
         int ret = 0;
         int op_version = 0;
@@ -1495,7 +1498,7 @@ out:
 int32_t
 glusterd_store_retrieve_bricks (glusterd_volinfo_t *volinfo)
 {
-
+		/* 读入 volinfo 卷的 bricks 配置 */
         int32_t                 ret = 0;
         glusterd_brickinfo_t    *brickinfo = NULL;
         gf_store_iter_t         *iter = NULL;
@@ -1516,6 +1519,7 @@ glusterd_store_retrieve_bricks (glusterd_volinfo_t *volinfo)
 
         priv = THIS->private;
 
+		/* 构建 /etc/glusterd/vols/vol/bricks 配置文件路径 */
         GLUSTERD_GET_BRICK_DIR (brickdir, volinfo, priv)
 
         ret = gf_store_iter_new (volinfo->shandle, &tmpiter);
@@ -1869,11 +1873,12 @@ glusterd_store_retrieve_volume (char    *volname)
         ret = glusterd_volinfo_new (&volinfo);
         if (ret)
                 goto out;
-
+		/* 卷名 */
         strncpy (volinfo->volname, volname, GLUSTERD_MAX_VOLUME_NAME);
 
         priv = THIS->private;
 
+		/* 把 vols/vol/info 文件读入到 volinfo 里面 */
         GLUSTERD_GET_VOLUME_DIR(volpath, volinfo, priv);
         snprintf (path, sizeof (path), "%s/%s", volpath,
                   GLUSTERD_VOLUME_INFO_FILE);
@@ -1960,7 +1965,7 @@ glusterd_store_retrieve_volume (char    *volname)
                                      strlen (GLUSTERD_STORE_KEY_VOL_CAPS))) {
                         volinfo->caps = atoi (value);
                 } else {
-
+						/* 用户自定义的参数，目前没使用，跳过 */
                         if (is_key_glusterd_hooks_friendly (key)) {
                                 exists = 1;
 
@@ -2058,26 +2063,32 @@ glusterd_store_retrieve_volume (char    *volname)
         if (ret)
                 goto out;
 
+		/* 读入 volinfo 卷的 bricks 配置 */
         ret = glusterd_store_retrieve_bricks (volinfo);
         if (ret)
                 goto out;
 
+		/* 把 volinfo 内容算个checksum 存到 volinfo->cksum 里面 */
         ret = glusterd_compute_cksum (volinfo, _gf_false);
         if (ret)
                 goto out;
 
+		/* 读quota版本，未使用，跳过 */
         ret = glusterd_store_retrieve_quota_version (volinfo);
         if (ret)
                 goto out;
 
+		/* 读quota配置，未使用，跳过 */
         ret = glusterd_store_create_quota_conf_sh_on_absence (volinfo);
         if (ret)
                 goto out;
 
+		/* 算的是quota配置的chechsum，未使用，跳过 */
         ret = glusterd_compute_cksum (volinfo, _gf_true);
         if (ret)
                 goto out;
 
+		/* 保存quota version和chsum到文件，未使用，跳过 */
         ret = glusterd_store_save_quota_version_and_cksum (volinfo);
         if (ret)
                 goto out;
@@ -2213,6 +2224,7 @@ glusterd_store_retrieve_volumes (xlator_t  *this)
                 goto out;
         }
 
+		/* 遍历 vols/ 下的所有目录 */
         glusterd_for_each_entry (entry, dir);
 
         while (entry) {
@@ -2504,6 +2516,7 @@ out:
 int32_t
 glusterd_store_retrieve_peers (xlator_t *this)
 {
+		/* 读取 /etc/glusterd/peers 下所有配置并链接到 (glusterd_conf_t*)(this->private)->peers */
         int32_t                 ret = 0;
         glusterd_conf_t         *priv = NULL;
         DIR                     *dir = NULL;
@@ -2585,6 +2598,8 @@ glusterd_store_retrieve_peers (xlator_t *this)
 
                 (void) gf_store_iter_destroy (iter);
 
+				/* 链接到 glusterd_conf_t.peers，注意倒数第2个参数restore为1，
+				 * 这个调用不会创建rpc服务，而是在下面统一create */
                 ret = glusterd_friend_add (hostname, 0, state, &uuid,
                                            &peerinfo, 1, NULL);
 
@@ -2624,6 +2639,7 @@ glusterd_resolve_all_bricks (xlator_t  *this)
 
         GF_ASSERT (priv);
 
+		/* 把所有 hostname 转成 uuid 保存到brickinfo里面 */
         list_for_each_entry (volinfo, &priv->volumes, vol_list) {
                 list_for_each_entry (brickinfo, &volinfo->bricks, brick_list) {
                         ret = glusterd_resolve_brick (brickinfo);
@@ -2649,6 +2665,7 @@ glusterd_restore ()
 
         this = THIS;
 
+		/* 修正 /etc/glusterd/glusterd.info 的版本号 */
         ret = glusterd_restore_op_version (this);
         if (ret) {
                 gf_log (this->name, GF_LOG_ERROR,
@@ -2656,14 +2673,17 @@ glusterd_restore ()
                 goto out;
         }
 
+		/* 读取 vols/vol 下所有配置并构建到 glusterd_volinfo_t，保存至 this->private  */
         ret = glusterd_store_retrieve_volumes (this);
         if (ret)
                 goto out;
 
+		/* 读取peers配置，并创建 friend_rpc 服务 */
         ret = glusterd_store_retrieve_peers (this);
         if (ret)
                 goto out;
 
+		/* 把所有 hostname 转成 uuid 保存到brickinfo里面 */
         ret = glusterd_resolve_all_bricks (this);
         if (ret)
                 goto out;

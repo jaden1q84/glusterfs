@@ -132,22 +132,23 @@ struct rpc_clnt_config {
 
 struct rpc_clnt_connection {
         pthread_mutex_t          lock;
-        rpc_transport_t         *trans;
+        rpc_transport_t         *trans;			/* 对应的trans */
         struct rpc_clnt_config   config;
-        gf_timer_t              *reconnect;
+        gf_timer_t              *reconnect;		/* 重连定时器，在disconnect事件发生的时候设置 */
         gf_timer_t              *timer;
         gf_timer_t              *ping_timer;
-        struct rpc_clnt         *rpc_clnt;
-        char                     connected;
-        struct saved_frames     *saved_frames;
+        struct rpc_clnt         *rpc_clnt;		/* 所属的 rpc_clnt */
+        char                     connected;		/* 状态：-1、0、1对应无效?、未连接、已连接 */
+        struct saved_frames     *saved_frames;	/* 当前连接保存的调用帧组 */
         int32_t                  frame_timeout;
-	struct timeval           last_sent;
-	struct timeval           last_received;
+	struct timeval           last_sent;			/* 发出时间戳 */
+	struct timeval           last_received;		/* 接收时间戳 */
 	int32_t                  ping_started;
 };
 typedef struct rpc_clnt_connection rpc_clnt_connection_t;
 
 struct rpc_req {
+		/* 1个rpc请求保护的内容*/
         rpc_clnt_connection_t *conn;
         uint32_t               xid;
         struct iovec           req[2];
@@ -165,8 +166,9 @@ struct rpc_req {
 };
 
 typedef struct rpc_clnt {
+		/* rpc client 端管理器，glusterfs使用 */
         pthread_mutex_t        lock;
-        rpc_clnt_notify_t      notifyfn;
+        rpc_clnt_notify_t      notifyfn;				/* rpc 层事件回调 */
         rpc_clnt_connection_t  conn;
         void                  *mydata;
         uint64_t               xid;
@@ -177,7 +179,7 @@ typedef struct rpc_clnt {
         /* Memory pool for rpc_req_t */
         struct mem_pool       *reqpool;
 
-        struct mem_pool       *saved_frames_pool;
+        struct mem_pool       *saved_frames_pool;		/* 保存调用帧的内存池 */
 
         glusterfs_ctx_t       *ctx;
         int                   refcount;

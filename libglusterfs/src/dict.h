@@ -80,19 +80,21 @@ struct _data_pair {
         char              *key;
 };
 
+/* 词典，其实就是个键值对构成的hash表，不明白为什么要取个dict这么奇怪的名字……  
+ * 键值对是可以重复，根据使用者要求来定义是否replace就可以 */
 struct _dict {
-        unsigned char   is_static:1;
-        int32_t         hash_size;
-        int32_t         count;
-        int32_t         refcount;
-        data_pair_t   **members;
-        data_pair_t    *members_list;
-        char           *extra_free;
-        char           *extra_stdfree;
-        gf_lock_t       lock;
-        data_pair_t    *members_internal;
-        data_pair_t     free_pair;
-        gf_boolean_t    free_pair_in_use;
+        unsigned char   is_static:1;		/* Unkown... */
+        int32_t         hash_size;			/* hash表桶个数 */
+        int32_t         count;				/* 当前键值队个数 */
+        int32_t         refcount;			/* 整个字典的引用计数 */
+        data_pair_t   **members;			/* hash桶数组，每个桶为一个不循环的双向链表 */
+        data_pair_t    *members_list;		/* 所有member的链表 */
+        char           *extra_free;			/* 看着像外部额外的buf，destroy时会释放 */
+        char           *extra_stdfree;		/* 与前面的区别是，这个是用malloc、free分配和释放的 */
+        gf_lock_t       lock;				/* 外部查找、增加都要加锁 */
+        data_pair_t    *members_internal;	/* Unkown... */
+        data_pair_t     free_pair;			/* 如果有只有1个键值对时，先用这个，统一会链到members和members_list里面。看起来是为了效率考虑 */
+        gf_boolean_t    free_pair_in_use;	/* free_pair在用 */
 };
 
 

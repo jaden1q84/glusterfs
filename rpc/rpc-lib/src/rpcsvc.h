@@ -124,8 +124,8 @@ typedef struct rpcsvc_notify_wrapper rpcsvc_notify_wrapper_t;
 typedef struct rpcsvc_request rpcsvc_request_t;
 
 typedef struct {
-        rpc_transport_t         *trans;
-        rpcsvc_t                *svc;
+        rpc_transport_t         *trans;			/* 该listener用的trans */
+        rpcsvc_t                *svc;			/* 关联的rpc service */
         /* FIXME: remove address from this structure. Instead use get_myaddr
          * interface implemented by individual transports.
          */

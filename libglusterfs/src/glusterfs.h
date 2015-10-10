@@ -334,6 +334,7 @@ typedef struct _server_cmdline server_cmdline_t;
 #define GF_OPTION_DISABLE  _gf_false
 #define GF_OPTION_DEFERRED 2
 
+/* 参数详见 gf_options */
 struct _cmd_args {
         /* basic options */
         char             *volfile_server;
@@ -400,7 +401,7 @@ struct _glusterfs_graph {
         struct list_head          list;
         char                      graph_uuid[128];
         struct timeval            dob;
-        void                     *first;
+        void                     *first;		/* 即xlator指针 */
         void                     *top;   /* selected by -n */
         int                       xl_count;
         int                       id;    /* Used in logging */
@@ -414,10 +415,10 @@ typedef struct _glusterfs_graph glusterfs_graph_t;
 typedef int32_t (*glusterfsd_mgmt_event_notify_fn_t) (int32_t event, void *data,
                                                       ...);
 struct _glusterfs_ctx {
-        cmd_args_t          cmd_args;
-        char               *process_uuid;
-        FILE               *pidfp;
-        char                fin;
+        cmd_args_t          cmd_args;			/*启动参数*/
+        char               *process_uuid;		/*进程UUID，结构：主机名-pid-时间戳:微妙*/
+        FILE               *pidfp;				/* 当前进程的 .pid 文件fp，对应参数 -p cmd_args->pid_file */
+        char                fin;				/* TODO: Unknown... */
         void               *timer;
         void               *ib;
         struct call_pool   *pool;
@@ -427,8 +428,8 @@ struct _glusterfs_ctx {
         size_t              page_size;
         struct list_head    graphs; /* double linked list of graphs - one per volfile parse */
         glusterfs_graph_t  *active; /* the latest graph in use */
-        void               *master; /* fuse, or libglusterfsclient (however, not protocol/server) */
-        void               *mgmt;   /* xlator implementing MOPs for centralized logging, volfile server */
+        void               *master; /* fuse, or libglusterfsclient (however, not protocol/server) */ /* 客户端的master xlator，glusterfs的是fuse，api就是lib库 */
+        void               *mgmt;   /* xlator implementing MOPs for centralized logging, volfile server */ /* 对于glusterfs来说，是一个rpc_clnt指针，链接到glusterd进程的 */
         void               *listener; /* listener of the commands from glusterd */
         unsigned char       measure_latency; /* toggle switch for latency measurement */
         pthread_t           sigwaiter;
@@ -441,17 +442,19 @@ struct _glusterfs_ctx {
         int                 process_mode; /*mode in which process is runninng*/
         struct syncenv     *env;          /* The env pointer to the synctasks */
 
-        struct list_head    mempool_list; /* used to keep a global list of
+        struct list_head    mempool_list; /* 所有mem_pool分配的内存都在这里可以找到，非mem_pool的内存则不会在这里，
+											 如果要统计非mem_pool分配出去的内存池，只能打开 --mem-accounting 统计
+											 used to keep a global list of
                                              mempools, used to log details of
                                              mempool in statedump */
-        char               *statedump_path;
+        char               *statedump_path;	 /* 输出statedump的路径，默认NULL时输出到/run/gluster */
 
         struct mem_pool    *dict_pool;
         struct mem_pool    *dict_pair_pool;
         struct mem_pool    *dict_data_pool;
 
         glusterfsd_mgmt_event_notify_fn_t notify; /* Used for xlators to make
-                                                     call to fsd-mgmt */
+                                                     call to fsd-mgmt */ /* 对glusterfs的事件只有rebalance */
         gf_log_handle_t     log; /* all logging related variables */
 
         int                 mem_acct_enable;

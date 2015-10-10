@@ -1913,7 +1913,7 @@ afr_readv (call_frame_t *frame, xlator_t *this,
         xlator_t **     children   = NULL;
         int             call_child = 0;
         int32_t         op_errno   = 0;
-        int32_t         read_child = -1;
+        int32_t         read_child = -1;    // 选定的副本位置 lzj
         int             ret        = -1;
 
         VALIDATE_OR_GOTO (frame, out);
@@ -1938,7 +1938,8 @@ afr_readv (call_frame_t *frame, xlator_t *this,
                 op_errno = ENOMEM;
                 goto out;
         }
-
+        
+        // 选副本
         read_child = afr_inode_get_read_ctx (this, fd->inode, local->fresh_children);
         ret = afr_get_call_child (this, local->child_up, read_child,
                                      local->fresh_children,

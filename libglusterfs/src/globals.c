@@ -113,6 +113,8 @@ glusterfs_this_init ()
 xlator_t **
 __glusterfs_this_location ()
 {
+	/* 获取当前线程的xlator，如果没有就申请一个保持到线程变量内，默认指向
+	 * global_xlator，调用者可以通过 THIS 修改。 */
         xlator_t **this_location = NULL;
         int        ret = 0;
 
@@ -321,7 +323,8 @@ glusterfs_globals_init (glusterfs_ctx_t *ctx)
         int ret = 0;
 
         gf_log_globals_init (ctx);
-
+		
+		/* 下面都是 pthread_key_create 初始化创建各线程的key */
         ret = glusterfs_this_init ();
         if (ret) {
                 gf_log ("", GF_LOG_CRITICAL,

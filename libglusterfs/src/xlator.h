@@ -839,13 +839,14 @@ typedef struct xlator_list {
 
 
 struct _xlator {
+		/* 解析vol文件，把xlator关系图构建起来，首xlator保存在graph first */
         /* Built during parsing */
         char          *name;
         char          *type;
         xlator_t      *next;
         xlator_t      *prev;
-        xlator_list_t *parents;
-        xlator_list_t *children;
+        xlator_list_t *parents;		/* 父卷xlator */
+        xlator_list_t *children;	/* 子卷xlator */
         dict_t        *options;
 
         /* Set after doing dlopen() */

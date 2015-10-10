@@ -188,6 +188,7 @@ err_out:
         return NULL;
 }
 
+/* 不加锁查找key的键值对 */
 static data_pair_t *
 _dict_lookup (dict_t *this, char *key)
 {
@@ -241,6 +242,7 @@ _dict_set (dict_t *this, char *key, data_t *value, gf_boolean_t replace)
         int ret = 0;
 
         if (!key) {
+				/* 可以不指定key，用value的指针造个key，这时key的内容由 gf_asprintf 申请 */
                 ret = gf_asprintf (&key, "ref:%p", value);
                 if (-1 == ret) {
                         gf_log ("dict", GF_LOG_WARNING, "asprintf failed %s", key);
@@ -257,6 +259,7 @@ _dict_set (dict_t *this, char *key, data_t *value, gf_boolean_t replace)
                 pair = _dict_lookup (this, key);
 
                 if (pair) {
+						/* 替换流程 */
                         data_t *unref_data = pair->value;
                         pair->value = data_ref (value);
                         data_unref (unref_data);
@@ -282,10 +285,11 @@ _dict_set (dict_t *this, char *key, data_t *value, gf_boolean_t replace)
 
         if (key_free) {
                 /* It's ours.  Use it. */
-                pair->key = key;
+                pair->key = key;	/* 这时key的内容是gf_asprintf申请的，可以直接赋值 */
                 key_free = 0;
         }
         else {
+				/* key要申请内存 */
                 pair->key = (char *) GF_CALLOC (1, strlen (key) + 1,
                                                 gf_common_mt_char);
                 if (!pair->key) {
@@ -299,11 +303,13 @@ _dict_set (dict_t *this, char *key, data_t *value, gf_boolean_t replace)
                 }
                 strcpy (pair->key, key);
         }
-        pair->value = data_ref (value);
+        pair->value = data_ref (value);	/* data 内存引用 */
 
+		/* 插到hash桶的头部 */
         pair->hash_next = this->members[hashval];
         this->members[hashval] = pair;
 
+		/* 插到members_list头部，这是一个不循环的双向链表 */
         pair->next = this->members_list;
         pair->prev = NULL;
         if (this->members_list)

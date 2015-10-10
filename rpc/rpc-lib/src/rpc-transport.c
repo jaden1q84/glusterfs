@@ -149,6 +149,7 @@ out:
 rpc_transport_t *
 rpc_transport_load (glusterfs_ctx_t *ctx, dict_t *options, char *trans_name)
 {
+	/* 根据配置文件，装载对应的 rpc-transport 并执行 init 函数，代码在 rpc/rpc-transport 下面 */
 	struct rpc_transport *trans = NULL, *return_trans = NULL;
 	char *name = NULL;
 	void *handle = NULL;
@@ -326,7 +327,8 @@ rpc_transport_load (glusterfs_ctx_t *ctx, dict_t *options, char *trans_name)
 
         pthread_mutex_init (&trans->lock, NULL);
         trans->xl = this;
-
+		
+		/* 初始化装载的trans */
 	ret = trans->init (trans);
 	if (ret != 0) {
 		gf_log ("rpc-transport", GF_LOG_ERROR,

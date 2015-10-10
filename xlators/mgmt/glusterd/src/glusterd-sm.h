@@ -92,7 +92,7 @@ struct glusterd_peerinfo_ {
         glusterd_peer_state_info_t      state;
         char                            *hostname;
         int                             port;
-        struct list_head                uuid_list;
+        struct list_head                uuid_list;		/* 链接到 glusterd_conf_t.peers */
         struct list_head                op_peers_list;
         struct rpc_clnt                 *rpc;
         rpc_clnt_prog_t                 *mgmt;

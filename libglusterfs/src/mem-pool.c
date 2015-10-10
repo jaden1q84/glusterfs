@@ -296,6 +296,7 @@ mem_pool_new_fn (unsigned long sizeof_type,
         if (!mem_pool)
                 return NULL;
 
+		/* 该内存池的名字 */
         ret = gf_asprintf (&mem_pool->name, "%s:%s", THIS->name, name);
         if (ret < 0)
                 return NULL;
@@ -312,7 +313,8 @@ mem_pool_new_fn (unsigned long sizeof_type,
         mem_pool->padded_sizeof_type = padded_sizeof_type;
         mem_pool->cold_count = count;
         mem_pool->real_sizeof_type = sizeof_type;
-
+		
+		/* 申请 count * padded_sizeof_type 的大空间 */
         pool = GF_CALLOC (count, padded_sizeof_type, gf_common_mt_long);
         if (!pool) {
                 GF_FREE (mem_pool->name);
@@ -320,6 +322,11 @@ mem_pool_new_fn (unsigned long sizeof_type,
                 return NULL;
         }
 
+		/* 每个chunk的结构为
+		 * |--list_head--|--mem_pool*--|--in_use--|--data--|
+		 */
+
+		/* 把大块空间组织成链表 */
         for (i = 0; i < count; i++) {
                 list = pool + (i * (padded_sizeof_type));
                 INIT_LIST_HEAD (list);
@@ -375,14 +382,15 @@ mem_get (struct mem_pool *mem_pool)
         {
                 mem_pool->alloc_count++;
                 if (mem_pool->cold_count) {
+						/* 内存池里面有空闲块，从队列拿一个出来 */
                         list = mem_pool->list.next;
                         list_del (list);
 
-                        mem_pool->hot_count++;
-                        mem_pool->cold_count--;
+                        mem_pool->hot_count++; /* 分配出去的内存块 */
+                        mem_pool->cold_count--; /* 剩下的内存块 */
 
                         if (mem_pool->max_alloc < mem_pool->hot_count)
-                                mem_pool->max_alloc = mem_pool->hot_count;
+                                mem_pool->max_alloc = mem_pool->hot_count; /* 最大在用内存块峰值 */
 
                         ptr = list;
                         in_use = (ptr + GF_MEM_POOL_LIST_BOUNDARY +
@@ -412,8 +420,10 @@ mem_get (struct mem_pool *mem_pool)
                  * because it is too much work knowing that a better slab
                  * allocator is coming RSN.
                  */
-                mem_pool->pool_misses++;
-                mem_pool->curr_stdalloc++;
+				
+				/* 内存池不够用，走标准分配，注意：这块内存不会放内存池里面，put回来时通过 __is_member 来判断 */
+                mem_pool->pool_misses++; /* 不够用的次数统计 */
+                mem_pool->curr_stdalloc++; /* 执行标准分配的次数，和最大次数 */
                 if (mem_pool->max_stdalloc < mem_pool->curr_stdalloc)
                         mem_pool->max_stdalloc = mem_pool->curr_stdalloc;
                 ptr = GF_CALLOC (1, mem_pool->padded_sizeof_type,

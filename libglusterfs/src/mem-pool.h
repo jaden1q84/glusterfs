@@ -163,21 +163,21 @@ out:
 }
 
 struct mem_pool {
-        struct list_head  list;
-        int               hot_count;
-        int               cold_count;
-        gf_lock_t         lock;
-        unsigned long     padded_sizeof_type;
-        void             *pool;
-        void             *pool_end;
-        int               real_sizeof_type;
-        uint64_t          alloc_count;
-        uint64_t          pool_misses;
-        int               max_alloc;
-        int               curr_stdalloc;
-        int               max_stdalloc;
-        char             *name;
-        struct list_head  global_list;
+        struct list_head  list;				/* 内存池空闲chunk列表，和cold_count对应 */
+        int               hot_count;		/* 从内存池分配出去的个数 */
+        int               cold_count;		/* 内存池未分配出去的个数 */
+        gf_lock_t         lock;				/* 内存池的锁，get、put都要加 */
+        unsigned long     padded_sizeof_type;/* 补充mem_pool边界位置后的块大小，即使走stdalloc也是按这个大小分配，因此整个池在用空间应该是 (hot_count + cold_count + curr_stdalloc) * padded_sizeof_type */
+        void             *pool;				/* 内存池起始位置，可用来判断一块内存是否从池分配 */
+        void             *pool_end;			/* 内存池结束位置 */
+        int               real_sizeof_type; /* 请求的块大小，会被pad成padded_sizeof_type */
+        uint64_t          alloc_count;		/* 总共分配过的次数，包括池内分配和走标准分配，不会减少 */
+        uint64_t          pool_misses;		/* 内存池用满，无法分配的次数统计 */
+        int               max_alloc;		/* 从池中分配出去的在用chunk数峰值 */
+        int               curr_stdalloc;	/* 无法从池中分配时，会走标准分配，当前走标准分配的个数，put回来时减少 */
+        int               max_stdalloc;		/* 无法从池中分配的最大峰值次数 */
+        char             *name;				/* 池名字 */
+        struct list_head  global_list;		/* 链到指定ctx的 mempool_list 里面 */
 };
 
 struct mem_pool *

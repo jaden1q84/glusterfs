@@ -2833,6 +2833,7 @@ glusterd_friend_rpc_create (xlator_t *this, glusterd_peerinfo_t *peerinfo,
          * create our RPC endpoint with the same address that the peer would
          * use to reach us.
          */
+		/* glusterd 可以支持绑定指定地址，但 glusterfsd 不是这里指定的 */
         if (this->options) {
                 data = dict_get(this->options,"transport.socket.bind-address");
                 if (data) {

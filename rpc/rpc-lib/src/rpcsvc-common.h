@@ -33,6 +33,7 @@ typedef int (*rpcsvc_notify_t) (struct rpcsvc_state *, void *mydata,
 struct drc_globals;
 typedef struct drc_globals rpcsvc_drc_globals_t;
 
+/* 所有rpc服务request的管理器 */
 /* Contains global state required for all the RPC services.
  */
 typedef struct rpcsvc_state {
@@ -41,35 +42,35 @@ typedef struct rpcsvc_state {
          * other options.
          */
 
-        pthread_mutex_t         rpclock;
+        pthread_mutex_t         rpclock;			/* 管理器的锁 */
 
-        unsigned int            memfactor;
+        unsigned int            memfactor;			/* 内存因子，初始化时，如果调用者不指定内存池容量时，计算rxpool的容量 */
 
         /* List of the authentication schemes available. */
-        struct list_head        authschemes;
+        struct list_head        authschemes;		/* 内存因子，初始化时，如果调用者不指定内存池容量时，计算rxpool的容量 */
 
         /* Reference to the options */
-        dict_t                  *options;
+        dict_t                  *options;			/* 这个rpc的配置 */
 
         /* Allow insecure ports. */
         gf_boolean_t            allow_insecure;
         gf_boolean_t            register_portmap;
         gf_boolean_t            root_squash;
-        glusterfs_ctx_t         *ctx;
+        glusterfs_ctx_t         *ctx;				/* 对应的所在的ctx */
 
         /* list of connections which will listen for incoming connections */
-        struct list_head        listeners;
+        struct list_head        listeners;			/* 该rpcsvc的所有listeners，用来侦听连入的连接，可以有多个 */
 
         /* list of programs registered with rpcsvc */
-        struct list_head        programs;
+        struct list_head        programs;			/* 注册的rpc的调用程序 */
 
         /* list of notification callbacks */
-        struct list_head        notify;
-        int                     notify_count;
+        struct list_head        notify;				/* 事件通知回调器（wrapper）链表 */
+        int                     notify_count;		/* 链表长度 */
 
-        void                    *mydata; /* This is xlator */
+        void                    *mydata; /* This is xlator */ /* 这个就是xlator指针 */
         rpcsvc_notify_t         notifyfn;
-        struct mem_pool         *rxpool;
+        struct mem_pool         *rxpool;			/* 当前接受到的rpcsvc_request_t的内存池 */
         rpcsvc_drc_globals_t    *drc;
 
 	/* per-client limit of outstanding rpc requests */
