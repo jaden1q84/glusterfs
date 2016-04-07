@@ -40,14 +40,17 @@ __iot_dequeue (iot_conf_t *conf, int *pri, struct timespec *sleep)
 	sleep->tv_sec = 0;
 	sleep->tv_nsec = 0;
         for (i = 0; i < IOT_PRI_MAX; i++) {
+				/* 从最高优先级队列开始处理op。队列为空或队列长度
+				 * 大于最大长度，则跳过该队列处理下一个 */
                 if (list_empty (&conf->reqs[i]) ||
                    (conf->ac_iot_count[i] >= conf->ac_iot_limit[i]))
                         continue;
 
 		if (i == IOT_PRI_LEAST) {
+			/* 如果是最低优先级队列，要进行采样，保证一秒内最大处理数不超过设置值 */
 			pthread_mutex_lock(&conf->throttle.lock);
 			if (!conf->throttle.sample_time.tv_sec) {
-				/* initialize */
+				/* initialize 首次进入，初始化采样时间 */
 				gettimeofday(&conf->throttle.sample_time, NULL);
 			} else {
 				/*
@@ -61,6 +64,7 @@ __iot_dequeue (iot_conf_t *conf, int *pri, struct timespec *sleep)
 				timersub(&curtv, &conf->throttle.sample_time,
 					 &difftv);
 				if (difftv.tv_sec >= IOT_LEAST_THROTTLE_DELAY) {
+					/* 超过一次采样的最长时间，默认是1s，重新统计采样数据 */
 					conf->throttle.cached_rate =
 						conf->throttle.sample_cnt;
 					conf->throttle.sample_cnt = 0;
@@ -76,6 +80,8 @@ __iot_dequeue (iot_conf_t *conf, int *pri, struct timespec *sleep)
 				if (conf->throttle.rate_limit &&
 				    conf->throttle.sample_cnt >=
 						conf->throttle.rate_limit) {
+					/* 如果当前采样的最低优先级op数已经大于限制值
+					 * 退出本次出队，并通知线程sleep到指定时间 */
 					struct timeval delay;
 					delay.tv_sec = IOT_LEAST_THROTTLE_DELAY;
 					delay.tv_usec = 0;
@@ -89,10 +95,11 @@ __iot_dequeue (iot_conf_t *conf, int *pri, struct timespec *sleep)
 					break;
 				}
 			}
+			/* 采样低优先级的op数 */
 			conf->throttle.sample_cnt++;
 			pthread_mutex_unlock(&conf->throttle.lock);
 		}
-
+				/* 增加该队列的干活线程计数 */
                 stub = list_entry (conf->reqs[i].next, call_stub_t, list);
                 conf->ac_iot_count[i]++;
                 *pri = i;
@@ -102,9 +109,10 @@ __iot_dequeue (iot_conf_t *conf, int *pri, struct timespec *sleep)
         if (!stub)
                 return NULL;
 
+		/* 请求数减一 */
         conf->queue_size--;
         conf->queue_sizes[*pri]--;
-        list_del_init (&stub->list);
+        list_del_init (&stub->list);	/* 出队 */
 
         return stub;
 }
@@ -148,9 +156,11 @@ iot_worker (void *data)
                 pthread_mutex_lock (&conf->mutex);
                 {
                         if (pri != -1) {
+								/* pri队列的op出队成功，对应优先级队列op数减1 */
                                 conf->ac_iot_count[pri]--;
                                 pri = -1;
                         }
+						/* 队列为0，无事可干，睡眠 idle_time 秒 */
                         while (conf->queue_size == 0) {
                                 conf->sleep_count++;
 
@@ -167,6 +177,8 @@ iot_worker (void *data)
 
                         if (timeout) {
                                 if (conf->curr_count > IOT_MIN_THREADS) {
+										/* 线程是因为 timeout 醒过来的，并且当前线程大于最小线程数
+										 * 那么线程执行完这一次就要自动销毁，减少当前线程数 */
                                         conf->curr_count--;
                                         bye = 1;
                                         gf_log (conf->this->name, GF_LOG_DEBUG,
@@ -177,8 +189,10 @@ iot_worker (void *data)
                                 }
                         }
 
+						/* 从队列里面出队op请求干活，pri是出队op所在的优先级 */
                         stub = __iot_dequeue (conf, &pri, &sleep);
 			if (!stub && (sleep.tv_sec || sleep.tv_nsec)) {
+				/* 没请求出队，并且出队逻辑要求睡眠sleep时间再重入干一次 */
 				pthread_cond_timedwait(&conf->cond,
 						       &conf->mutex, &sleep);
 				pthread_mutex_unlock(&conf->mutex);
@@ -187,6 +201,7 @@ iot_worker (void *data)
                 }
                 pthread_mutex_unlock (&conf->mutex);
 
+				/* 干活了... */
                 if (stub) /* guard against spurious wakeups */
                         call_resume (stub);
 
@@ -195,6 +210,7 @@ iot_worker (void *data)
         }
 
         if (pri != -1) {
+				/* 干完活，对应优先级最大并发线程数减1 */
                 pthread_mutex_lock (&conf->mutex);
                 {
                         conf->ac_iot_count[pri]--;
@@ -209,7 +225,7 @@ int
 do_iot_schedule (iot_conf_t *conf, call_stub_t *stub, int pri)
 {
         int   ret = 0;
-
+		/* 不同优先级的op入队，唤醒睡眠的线程 */
         pthread_mutex_lock (&conf->mutex);
         {
                 __iot_enqueue (conf, stub, pri);
@@ -2558,7 +2574,7 @@ out:
         return 0;
 }
 
-
+/* 扩大线程池 */
 int
 __iot_workers_scale (iot_conf_t *conf)
 {
@@ -2568,6 +2584,7 @@ __iot_workers_scale (iot_conf_t *conf)
         int       ret = 0;
         int       i = 0;
 
+		/* 按当前压力估算应当scale的目标线程数 */
         for (i = 0; i < IOT_PRI_MAX; i++)
                 scale += min (conf->queue_sizes[i], conf->ac_iot_limit[i]);
 
@@ -2577,10 +2594,12 @@ __iot_workers_scale (iot_conf_t *conf)
         if (scale > conf->max_count)
                 scale = conf->max_count;
 
+		/* diff 线程数小于应该scale的差值 */
         if (conf->curr_count < scale) {
                 diff = scale - conf->curr_count;
         }
 
+		/* 创建线程 */
         while (diff) {
                 diff --;
 
@@ -2628,7 +2647,7 @@ set_stack_size (iot_conf_t *conf)
         xlator_t *this = NULL;
 
         this = THIS;
-
+		/* 设置线程所的堆栈空间最大大小 */
         pthread_attr_init (&conf->w_attr);
         err = pthread_attr_setstacksize (&conf->w_attr, stacksize);
         if (err == EINVAL) {
@@ -2812,7 +2831,8 @@ init (xlator_t *this)
         for (i = 0; i < IOT_PRI_MAX; i++) {
                 INIT_LIST_HEAD (&conf->reqs[i]);
         }
-
+		
+		/* 初始化线程池 */
 	ret = iot_workers_scale (conf);
 
         if (ret == -1) {
@@ -2821,6 +2841,7 @@ init (xlator_t *this)
                 goto out;
         }
 
+		/* 保存当前配置到xlator实例 */
 	this->private = conf;
         ret = 0;
 out:
