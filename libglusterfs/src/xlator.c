@@ -170,6 +170,13 @@ xlator_volopt_dynload (char *xlator_type, void **dl_handle,
 }
 
 
+/**
+ * @brief 动态装载制定xlator
+ *
+ * @param xl
+ *
+ * @return 
+ */
 int
 xlator_dynload (xlator_t *xl)
 {

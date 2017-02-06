@@ -2342,10 +2342,12 @@ socket_event_poll_in (rpc_transport_t *this)
         rpc_transport_pollin_t *pollin = NULL;
         socket_private_t       *priv = this->private;
 
+        /* socket处理状态机，会读取到完整的rpc包未知 */
 	ret = socket_proto_state_machine (this, &pollin);
 
 	if (pollin) {
                 priv->ot_state = OT_CALLBACK;
+                /* 发出rpc notify事件，如果是fop就会一直执行到底层再返回 */
                 ret = rpc_transport_notify (this, RPC_TRANSPORT_MSG_RECEIVED,
                                             pollin);
                 if (priv->ot_state == OT_CALLBACK) {

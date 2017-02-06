@@ -615,6 +615,7 @@ rpcsvc_handle_rpc_call (rpcsvc_t *svc, rpc_transport_t *trans,
                         unprivileged = _gf_true;
         }
 
+        /* 把msg构建成request */
         req = rpcsvc_request_create (svc, trans, msg);
         if (!req)
                 goto out;
@@ -622,6 +623,7 @@ rpcsvc_handle_rpc_call (rpcsvc_t *svc, rpc_transport_t *trans,
         if (!rpcsvc_request_accepted (req))
                 goto err_reply;
 
+        /* 根据req匹配对应的actor，包含了各种fop对应的函数 */
         actor = rpcsvc_program_actor (req);
         if (!actor)
                 goto err_reply;
@@ -690,6 +692,7 @@ rpcsvc_handle_rpc_call (rpcsvc_t *svc, rpc_transport_t *trans,
                 }
 
                 if (req->synctask) {
+                        /* 同步调用 */
                         if (msg->hdr_iobuf)
                                 req->hdr_iobuf = iobuf_ref (msg->hdr_iobuf);
 
@@ -698,6 +701,7 @@ rpcsvc_handle_rpc_call (rpcsvc_t *svc, rpc_transport_t *trans,
                                             rpcsvc_check_and_reply_error, NULL,
                                             req);
                 } else {
+                        /* 异步调用 */
                         ret = actor_fn (req);
                 }
         }
@@ -791,6 +795,7 @@ rpcsvc_notify (rpc_transport_t *trans, void *mydata,
                 break;
 
         case RPC_TRANSPORT_MSG_RECEIVED:
+                /* 收包事件 */
                 msg = data;
                 ret = rpcsvc_handle_rpc_call (svc, trans, msg);
                 break;

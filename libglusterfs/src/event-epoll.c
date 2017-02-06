@@ -33,13 +33,14 @@ struct event_slot_epoll {
 	int events;
 	int gen;
 	int ref;
-	int do_close;
+	int do_close;   /* 标记unref到0释放资源时要关闭fd */
 	int in_handler;
 	void *data;
 	event_handler_t handler;
 	gf_lock_t lock;
 };
 
+/* 事件线程的data */
 struct event_thread_data {
         struct event_pool *event_pool;
         int    event_index;
@@ -71,11 +72,13 @@ __event_newtable (struct event_pool *event_pool, int table_idx)
 static int
 __event_slot_alloc (struct event_pool *event_pool, int fd)
 {
+        /* 在二级表里面分配一个空闲的slot，返回index */
         int  i = 0;
 	int  table_idx = -1;
 	int  gen = -1;
 	struct event_slot_epoll *table = NULL;
 
+        /* 在注册表里面找一个有空闲slot的table */
 	for (i = 0; i < EVENT_EPOLL_TABLES; i++) {
 		switch (event_pool->slots_used[i]) {
 		case EVENT_EPOLL_SLOTS:
@@ -104,6 +107,7 @@ __event_slot_alloc (struct event_pool *event_pool, int fd)
 
 	table_idx = i;
 
+        /* 在table里面找一个空slot，并计数 */
 	for (i = 0; i < EVENT_EPOLL_SLOTS; i++) {
 		if (table[i].fd == -1) {
 			/* wipe everything except bump the generation */
@@ -120,6 +124,7 @@ __event_slot_alloc (struct event_pool *event_pool, int fd)
 		}
 	}
 
+        /* slot index */
 	return table_idx * EVENT_EPOLL_SLOTS + i;
 }
 
@@ -186,6 +191,7 @@ event_slot_get (struct event_pool *event_pool, int idx)
 	int                      table_idx = 0;
 	int                      offset = 0;
 
+        /* 从二级表里面返回slot，这里会给slot加引用计数 */
 	table_idx = idx / EVENT_EPOLL_SLOTS;
 	offset = idx % EVENT_EPOLL_SLOTS;
 
@@ -213,6 +219,7 @@ event_slot_unref (struct event_pool *event_pool, struct event_slot_epoll *slot,
 	int fd = -1;
 	int do_close = 0;
 
+        /* 减引用计数，较少到0就释放 */
 	LOCK (&slot->lock);
 	{
 		ref = --slot->ref;
@@ -352,6 +359,7 @@ event_register_epoll (struct event_pool *event_pool, int fd,
 
 	assert (slot->fd == fd);
 
+        /* 设置event，注册到epoll */
 	LOCK (&slot->lock);
 	{
 		/* make epoll 'singleshot', which
@@ -437,7 +445,7 @@ static int
 event_unregister_epoll (struct event_pool *event_pool, int fd, int idx_hint)
 {
 	int ret = -1;
-
+        /* 从epoll移除fd，但不关闭fd */
 	ret = event_unregister_epoll_common (event_pool, fd, idx_hint, 0);
 
 	return ret;
@@ -449,7 +457,7 @@ event_unregister_close_epoll (struct event_pool *event_pool, int fd,
 			      int idx_hint)
 {
 	int ret = -1;
-
+        /* 从epoll移除fd并关闭fd */
 	ret = event_unregister_epoll_common (event_pool, fd, idx_hint, 1);
 
 	return ret;
@@ -460,6 +468,7 @@ static int
 event_select_on_epoll (struct event_pool *event_pool, int fd, int idx,
                        int poll_in, int poll_out)
 {
+        /* 修改fd epoll事件 */
         int ret = -1;
 	struct event_slot_epoll *slot = NULL;
         struct epoll_event epoll_event = {0, };
@@ -480,6 +489,7 @@ event_select_on_epoll (struct event_pool *event_pool, int fd, int idx,
 		ev_data->idx = idx;
 		ev_data->gen = slot->gen;
 
+                /* 这个fd正在被别的线程处理，不能修改 */
 		if (slot->in_handler)
 			/* in_handler indicates at least one thread
 			   executing event_dispatch_epoll_handler()
@@ -514,6 +524,12 @@ out:
 }
 
 
+/**
+ * @brief 处理epoll事件函数
+ * @param event_pool
+ * @param event epoll_wait返回的事件指针，包含fd和gen
+ * @return 
+ */
 static int
 event_dispatch_epoll_handler (struct event_pool *event_pool,
                               struct epoll_event *event)
@@ -560,7 +576,7 @@ event_dispatch_epoll_handler (struct event_pool *event_pool,
 		handler = slot->handler;
 		data = slot->data;
 
-		slot->in_handler++;
+		slot->in_handler++;     // 记录正在处理
 	}
 pre_unlock:
 	UNLOCK (&slot->lock);
@@ -568,6 +584,7 @@ pre_unlock:
         if (!handler)
 		goto out;
 
+        /* 疑问：同一个fd会不会（或者可不可以）放到多个epoll里面？ */
 	ret = handler (fd, idx, data,
 		       (event->events & (EPOLLIN|EPOLLPRI)),
 		       (event->events & (EPOLLOUT)),
@@ -606,7 +623,13 @@ out:
         return ret;
 }
 
-
+/**
+ * @brief epoll工作线程
+ *
+ * @param data event_thread_data指针，包含该线程的event_pool结构和index
+ *
+ * @return 
+ */
 static void *
 event_dispatch_epoll_worker (void *data)
 {
@@ -733,6 +756,7 @@ event_dispatch_epoll (struct event_pool *event_pool)
                                  * as detachable. Errors can be ignored, they
                                  * spend their time as zombies if not detched
                                  * and the thread counts are decreased */
+                                /* 除0号线程，其他线程detach */
                                 if (i != 0)
                                         pthread_detach (event_pool->pollers[i]);
                         } else {
@@ -752,6 +776,7 @@ event_dispatch_epoll (struct event_pool *event_pool)
         }
         pthread_mutex_unlock (&event_pool->mutex);
 
+        /* 到这里就是启动流程最后一步，不会返回 */
         /* Just wait for the first thread, that is created in a joinable state
          * and will never die, ensuring this function never returns */
         if (event_pool->pollers[0] != 0)

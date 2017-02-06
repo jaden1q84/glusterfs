@@ -17,6 +17,7 @@
 
 #include "xlator.h"
 
+/* default fop 通过 gen-defaults.py 在编译时生成 */
 typedef struct {
         int op_ret;
         int op_errno;

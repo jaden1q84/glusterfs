@@ -74,6 +74,7 @@ glfs_process_volfp (struct glfs *fs, FILE *fp)
 		goto out;
 	}
 
+        /* 激活xlator图 */
 	ret = glusterfs_graph_activate (graph, ctx);
 
 	if (ret) {

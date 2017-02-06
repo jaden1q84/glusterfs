@@ -793,6 +793,7 @@ syncenv_destroy (struct syncenv *env)
 struct syncenv *
 syncenv_new (size_t stacksize, int procmin, int procmax)
 {
+        /* 初始化sync任务的线程池 */
         struct syncenv *newenv = NULL;
         int             ret = 0;
         int             i = 0;

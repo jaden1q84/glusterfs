@@ -397,7 +397,7 @@ struct _glusterfs_graph {
         struct list_head          list;
         char                      graph_uuid[128];
         struct timeval            dob;
-        void                     *first;
+        void                     *first;        /* first xlator */
         void                     *top;   /* selected by -n */
         uint32_t                  leaf_count;
         int                       xl_count;
@@ -435,7 +435,7 @@ struct _glusterfs_ctx {
         size_t              page_size;
         struct list_head    graphs; /* double linked list of graphs - one per volfile parse */
         glusterfs_graph_t  *active; /* the latest graph in use */
-        void               *master; /* fuse, or libglusterfsclient (however, not protocol/server) */
+        void               *master; /* 客户端才有的主xlator，例如fuse, or libglusterfsclient (however, not protocol/server) */
         void               *mgmt;   /* xlator implementing MOPs for centralized logging, volfile server */
         void               *listener; /* listener of the commands from glusterd */
         unsigned char       measure_latency; /* toggle switch for latency measurement */

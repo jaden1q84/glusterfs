@@ -1053,6 +1053,7 @@ init (xlator_t *this)
                 ret = -1;
                 goto out;
         }
+        /* 根据 transport-type 类型装载对应 rpc so，并开始listen */
         ret = rpcsvc_create_listeners (conf->rpc, this->options,
                                        this->name);
         if (ret < 1) {
@@ -1076,6 +1077,7 @@ init (xlator_t *this)
                 goto out;
         }
 
+        /* 非常关键的一步，把所有 fop 对应的回调函数注册到rpc服务里面 */
         glusterfs3_3_fop_prog.options = this->options;
         ret = rpcsvc_program_register (conf->rpc, &glusterfs3_3_fop_prog);
         if (ret) {

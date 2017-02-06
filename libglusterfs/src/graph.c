@@ -663,6 +663,7 @@ glusterfs_graph_activate (glusterfs_graph_t *graph, glusterfs_ctx_t *ctx)
                 return ret;
         }
 
+        /* 从first开始逐个init xlator*/
         /* XXX: perform init () */
         ret = glusterfs_graph_init (graph);
         if (ret) {
@@ -681,10 +682,12 @@ glusterfs_graph_activate (glusterfs_graph_t *graph, glusterfs_ctx_t *ctx)
 
         /* XXX: log full graph (_gf_dump_details) */
 
+        /* 设置为活动图 */
         list_add (&graph->list, &ctx->graphs);
         ctx->active = graph;
 
         /* XXX: attach to master and set active pointer */
+        /* client才有master，protocol/server 没有master */
         if (ctx->master) {
                 ret = xlator_notify (ctx->master, GF_EVENT_GRAPH_NEW, graph);
                 if (ret) {

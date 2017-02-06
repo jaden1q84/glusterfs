@@ -107,7 +107,7 @@ struct _call_stack_t {
         struct list_head              myframes; /* List of call_frame_t that go
                                                    to make the call stack */
 
-        int32_t                       op;
+        int32_t                       op;       /* fop */
         int8_t                        type;
         struct timeval                tv;
 };

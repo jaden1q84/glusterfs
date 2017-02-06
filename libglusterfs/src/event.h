@@ -38,8 +38,10 @@ struct event_pool {
 
 	int count;
 	struct event_slot_poll  *reg;
-	struct event_slot_epoll *ereg[EVENT_EPOLL_TABLES];
-	int slots_used[EVENT_EPOLL_TABLES];
+
+        /* 总共可以保存 EVENT_EPOLL_TABLES * EVENT_EPOLL_SLOTS 个fd */
+	struct event_slot_epoll *ereg[EVENT_EPOLL_TABLES];      /* register tables of slots */
+	int slots_used[EVENT_EPOLL_TABLES];                     /* counter of per table */
 
 	int used;
 	int changed;
@@ -52,8 +54,8 @@ struct event_pool {
 
         /* NOTE: Currently used only when event processing is done using
          * epoll. */
-        int eventthreadcount; /* number of event threads to execute. */
-        pthread_t pollers[EVENT_MAX_THREADS]; /* poller thread_id store,
+        int eventthreadcount; /* poller线程数 number of event threads to execute. */
+        pthread_t pollers[EVENT_MAX_THREADS]; /* poller线程池 poller thread_id store,
                                                      * and live status */
         int destroy;
         int activethreadcount;

@@ -117,7 +117,7 @@ int
 glusterfs_this_init ()
 {
         int  ret = 0;
-
+        // 初始化全局唯一的xlator及全局xlator的线程key
         ret = pthread_key_create (&this_xlator_key, glusterfs_this_destroy);
         if (ret != 0) {
                 gf_msg ("", GF_LOG_WARNING, ret,
@@ -138,6 +138,8 @@ glusterfs_this_init ()
 xlator_t **
 __glusterfs_this_location ()
 {
+        /* 获取当前线程对应的xlator指针，如果当前线程未设置就分配一个
+         * 如果xlator指针为空，就用全局的xlator */
         xlator_t **this_location = NULL;
         int        ret = 0;
 
@@ -380,6 +382,7 @@ gf_globals_init_once ()
 {
         int ret = 0;
 
+        /* 初始化全局xlator和其线程key */
         ret = glusterfs_this_init ();
         if (ret) {
                 gf_msg ("", GF_LOG_CRITICAL, 0, LG_MSG_TRANSLATOR_INIT_FAILED,
@@ -387,6 +390,7 @@ gf_globals_init_once ()
                 goto out;
         }
 
+        /* 初始化线程uuid buf的线程key */
         ret = glusterfs_uuid_buf_init ();
         if(ret) {
                 gf_msg ("", GF_LOG_CRITICAL, 0, LG_MSG_UUID_BUF_INIT_FAILED,
@@ -394,6 +398,7 @@ gf_globals_init_once ()
                 goto out;
         }
 
+        /* 初始化lkowner buf的线程key */
         ret = glusterfs_lkowner_buf_init ();
         if(ret) {
                 gf_msg ("", GF_LOG_CRITICAL, 0, LG_MSG_LKOWNER_BUF_INIT_FAILED,
@@ -401,6 +406,7 @@ gf_globals_init_once ()
                 goto out;
         }
 
+        /* 初始化lease id(租赁id？)buf的线程key */
         ret = glusterfs_leaseid_buf_init ();
         if (ret) {
                 gf_msg ("", GF_LOG_CRITICAL, 0, LG_MSG_LEASEID_BUF_INIT_FAILED,
@@ -408,6 +414,7 @@ gf_globals_init_once ()
                 goto out;
         }
 
+        /* 初始化 synctask 的线程key */
         ret = synctask_init ();
         if (ret) {
                 gf_msg ("", GF_LOG_CRITICAL, 0, LG_MSG_SYNCTASK_INIT_FAILED,
@@ -415,6 +422,7 @@ gf_globals_init_once ()
                 goto out;
         }
 
+        /* 初始化 syncopctx(同步op上下文？) 的线程key */
         ret = syncopctx_init ();
         if (ret) {
                 gf_msg ("", GF_LOG_CRITICAL, 0, LG_MSG_SYNCOPCTX_INIT_FAILED,
